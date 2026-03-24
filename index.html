@@ -1,667 +1,318 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-fullscreen">
-<title>VR Viewer</title>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --bg: #000;
-    --accent: #00e5ff;
-    --accent2: #ff3d71;
-    --text: #c8d8e8;
-    --dim: #4a6a8a;
-    --panel: #0d1420;
-    --border: #1a2a3a;
-  }
-
-  html, body {
-    width: 100%; height: 100%;
-    background: #000;
-    overflow: hidden;
-    font-family: 'Rajdhani', sans-serif;
-    touch-action: manipulation;
-  }
-
-  /* ===================== SETUP UI ===================== */
-  #setup-ui {
-    position: fixed;
-    inset: 0;
-    background: #070b12;
-    background-image:
-      radial-gradient(ellipse at 20% 20%, rgba(0,229,255,0.05) 0%, transparent 60%),
-      radial-gradient(ellipse at 80% 80%, rgba(255,61,113,0.04) 0%, transparent 60%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    padding: 1.5rem 1rem 2rem;
-    overflow-y: auto;
-    z-index: 100;
-  }
-
-  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Rajdhani:wght@300;500;700&display=swap');
-
-  .logo {
-    text-align: center;
-    margin-bottom: 1.5rem;
-  }
-
-  .logo h1 {
-    font-family: 'Space Mono', monospace;
-    font-size: 1.3rem;
-    letter-spacing: 0.15em;
-    color: var(--accent);
-    text-shadow: 0 0 20px rgba(0,229,255,0.4);
-  }
-
-  .logo p {
-    font-size: 0.82rem;
-    color: var(--dim);
-    margin-top: 0.3rem;
-    letter-spacing: 0.08em;
-    font-weight: 300;
-  }
-
-  .card {
-    background: #0d1420;
-    border: 1px solid #1a2a3a;
-    border-radius: 8px;
-    padding: 1.2rem;
-    width: 100%;
-    max-width: 460px;
-    margin-bottom: 1rem;
-    position: relative;
-  }
-
-  .card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  }
-
-  .card-title {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.68rem;
-    letter-spacing: 0.2em;
-    color: var(--accent);
-    text-transform: uppercase;
-    margin-bottom: 0.9rem;
-  }
-
-  textarea {
-    width: 100%;
-    min-height: 90px;
-    background: #000;
-    border: 1px solid var(--border);
-    color: var(--accent);
-    font-family: 'Space Mono', monospace;
-    font-size: 0.7rem;
-    padding: 0.7rem;
-    border-radius: 4px;
-    resize: vertical;
-    outline: none;
-    margin-bottom: 0.7rem;
-  }
-
-  textarea:focus { border-color: var(--accent); }
-
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.4rem;
-    background: transparent;
-    border: 1.5px solid var(--accent);
-    color: var(--accent);
-    font-family: 'Space Mono', monospace;
-    font-size: 0.72rem;
-    letter-spacing: 0.1em;
-    padding: 0.6rem 1.2rem;
-    border-radius: 4px;
-    cursor: pointer;
-    transition: all 0.2s;
-    text-transform: uppercase;
-    width: 100%;
-  }
-
-  .btn:hover, .btn:active { background: rgba(0,229,255,0.12); }
-  .btn.primary { background: rgba(0,229,255,0.12); }
-  .btn.go { background: var(--accent); color: #000; font-weight: 700; border-color: var(--accent); }
-  .btn:disabled { opacity: 0.3; pointer-events: none; }
-
-  .btn-row { display: flex; gap: 0.6rem; }
-
-  #answerCode {
-    background: rgba(0,0,0,0.5);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0.7rem;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.65rem;
-    color: var(--accent);
-    word-break: break-all;
-    min-height: 2rem;
-    margin-bottom: 0.7rem;
-    display: none;
-  }
-
-  #status-msg {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.7rem;
-    color: var(--dim);
-    margin-top: 0.6rem;
-    min-height: 1rem;
-  }
-
-  .status-dot {
-    display: inline-block;
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--dim);
-    margin-right: 0.4rem;
-    vertical-align: middle;
-  }
-
-  .status-dot.active { background: #00ff88; animation: pulse 1.5s infinite; }
-  .status-dot.error { background: var(--accent2); }
-
-  @keyframes pulse {
-    0%,100% { opacity: 1; }
-    50% { opacity: 0.3; }
-  }
-
-  .divider {
-    height: 1px;
-    background: linear-gradient(90deg, transparent, var(--border), transparent);
-    margin: 0.8rem 0;
-  }
-
-  .settings-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.6rem;
-    margin-bottom: 0.6rem;
-  }
-
-  .setting-item label {
-    display: block;
-    font-size: 0.72rem;
-    color: var(--dim);
-    margin-bottom: 0.3rem;
-    letter-spacing: 0.06em;
-  }
-
-  .setting-item select, .setting-item input[type=range] {
-    width: 100%;
-    background: #000;
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: 'Space Mono', monospace;
-    font-size: 0.72rem;
-    padding: 0.4rem 0.5rem;
-    border-radius: 4px;
-    outline: none;
-    -webkit-appearance: none;
-  }
-
-  .setting-item input[type=range] {
-    padding: 0;
-    height: 28px;
-    accent-color: var(--accent);
-  }
-
-  .range-val {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.68rem;
-    color: var(--accent);
-    text-align: right;
-    margin-top: 0.15rem;
-  }
-
-  /* ===================== VR VIEWER ===================== */
-  #vr-view {
-    position: fixed;
-    inset: 0;
-    background: #000;
-    display: none;
-    z-index: 10;
-  }
-
-  #vr-view.active { display: flex; }
-
-  .eye-container {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .eye-container.left { border-right: 2px solid #111; }
-
-  .eye-video {
-    /* Fill the eye panel */
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
-  /* Lens distortion effect via CSS (barrel distortion approximation) */
-  .eye-container.distort .eye-video {
-    transform: scale(1.05);
-    border-radius: 50% / 40%;
-    /* Subtle vignette */
-    -webkit-mask-image: radial-gradient(ellipse 90% 85% at 50% 50%, black 60%, transparent 100%);
-    mask-image: radial-gradient(ellipse 90% 85% at 50% 50%, black 60%, transparent 100%);
-  }
-
-  /* Crosshair overlay */
-  .crosshair {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 10px; height: 10px;
-    pointer-events: none;
-    opacity: 0.4;
-    z-index: 5;
-  }
-
-  .crosshair::before, .crosshair::after {
-    content: '';
-    position: absolute;
-    background: rgba(255,255,255,0.7);
-  }
-
-  .crosshair::before { width: 10px; height: 1px; top: 50%; left: 0; transform: translateY(-50%); }
-  .crosshair::after { width: 1px; height: 10px; top: 0; left: 50%; transform: translateX(-50%); }
-
-  /* Color fringe on edges */
-  .eye-container::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    border-radius: 50% / 40%;
-    box-shadow: inset 0 0 40px rgba(0,0,0,0.6);
-    z-index: 3;
-  }
-
-  /* HUD overlay */
-  #hud {
-    position: fixed;
-    bottom: 1.5rem;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 0.6rem;
-    z-index: 20;
-    opacity: 0;
-    transition: opacity 0.3s;
-    pointer-events: none;
-  }
-
-  #hud.visible {
-    opacity: 1;
-    pointer-events: all;
-  }
-
-  .hud-btn {
-    background: rgba(0,0,0,0.7);
-    border: 1px solid rgba(255,255,255,0.2);
-    color: #fff;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.6rem;
-    padding: 0.4rem 0.8rem;
-    border-radius: 4px;
-    cursor: pointer;
-    letter-spacing: 0.08em;
-    backdrop-filter: blur(8px);
-  }
-
-  /* IPD separator line */
-  #separator {
-    position: fixed;
-    top: 0; bottom: 0;
-    left: 50%;
-    width: 3px;
-    background: #111;
-    transform: translateX(-50%);
-    z-index: 15;
-    pointer-events: none;
-  }
-
-  /* Connection overlay on VR view */
-  #vr-status {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    text-align: center;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.6rem;
-    color: rgba(255,255,255,0.25);
-    padding: 0.3rem;
-    z-index: 20;
-    pointer-events: none;
-  }
-
-  /* Waiting for stream message */
-  #waiting-overlay {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 18;
-    background: #000;
-    pointer-events: none;
-  }
-
-  #waiting-overlay.hidden { display: none; }
-
-  .waiting-text {
-    font-family: 'Space Mono', monospace;
-    color: var(--accent);
-    font-size: 0.9rem;
-    letter-spacing: 0.15em;
-    animation: blink 1.4s infinite;
-    text-align: center;
-    padding: 0 2rem;
-  }
-
-  @keyframes blink {
-    0%,100%{ opacity:1; }
-    50%{ opacity:0.2; }
-  }
-
-  .scan-line {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%);
-    animation: scanh 4s linear infinite;
-    opacity: 0.3;
-    z-index: 19;
-    pointer-events: none;
-  }
-
-  @keyframes scanh {
-    0% { top: 0; }
-    100% { top: 100%; }
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>VR Stream — Mobile Viewer</title>
+  <style>
+    :root{
+      --bg:#070b12; --panel:#0d1420; --border:#1a2a3a; --accent:#00e5ff; --accent2:#ff3d71;
+      --text:#c8d8e8; --dim:#4a6a8a;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{width:100%;height:100%;overflow:hidden;background:#000;color:var(--text);font-family:system-ui,sans-serif}
+    body{background:var(--bg);padding:16px}
+    .wrap{max-width:760px;margin:0 auto;display:grid;gap:12px}
+    .head,.card{
+      background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px
+    }
+    .head h1{font-size:20px;color:var(--accent);letter-spacing:.12em}
+    .sub{font-size:12px;color:var(--dim);margin-top:4px;line-height:1.45}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .btn{
+      border:1px solid var(--accent);background:transparent;color:var(--accent);
+      padding:10px 14px;border-radius:10px;cursor:pointer;font:inherit
+    }
+    .btn.primary{background:rgba(0,229,255,.12)}
+    .btn.go{background:var(--accent);color:#000;font-weight:700}
+    .btn.danger{border-color:var(--accent2);color:var(--accent2)}
+    .btn:disabled{opacity:.35;cursor:not-allowed}
+    .status{font-family:ui-monospace,monospace;font-size:12px;color:var(--dim)}
+    .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--dim);margin-right:6px;vertical-align:middle}
+    .dot.active{background:#00ff88;box-shadow:0 0 10px #00ff88}
+    .dot.error{background:var(--accent2)}
+    textarea{
+      width:100%;min-height:92px;background:#000;border:1px solid var(--border);
+      color:var(--accent);border-radius:12px;padding:10px;font:inherit;resize:vertical;outline:none
+    }
+    #list{display:grid;gap:8px}
+    .peer{
+      width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;
+      border:1px solid var(--border);border-radius:12px;padding:12px;background:rgba(255,255,255,.02);cursor:pointer;
+      color:var(--text);text-align:left
+    }
+    .peer strong{display:block;font-size:14px}
+    .peer small{display:block;font-size:12px;color:var(--dim)}
+    .viewer{display:none;position:fixed;inset:0;background:#000;z-index:10}
+    .viewer.active{display:flex}
+    .eye{flex:1;position:relative;overflow:hidden}
+    .eye + .eye{border-left:2px solid #111}
+    .eye video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border:0;transform:scale(1.02)}
+    .hud{
+      position:fixed;left:50%;bottom:16px;transform:translateX(-50%);
+      display:flex;gap:8px;z-index:20
+    }
+    .hud .btn{background:rgba(0,0,0,.65);backdrop-filter:blur(8px)}
+    .mini{font-size:12px;color:var(--dim);line-height:1.5}
+    .overlay{
+      position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center;z-index:30
+    }
+    .overlay .card{max-width:420px;width:100%}
+    .hidden{display:none!important}
+  </style>
 </head>
 <body>
-
-<!-- SETUP UI -->
-<div id="setup-ui">
-  <div class="logo">
-    <h1>// VR VIEWER</h1>
-    <p>Cardboard Split-Screen Receiver</p>
-  </div>
-
-  <!-- Paste offer / auto-load -->
-  <div class="card" id="connect-card">
-    <div class="card-title">▸ Connect to PC Stream</div>
-    <p style="font-size:0.82rem; color:var(--dim); margin-bottom:0.7rem; line-height:1.5">
-      Paste the connection code from the PC sender, or scan the QR code to auto-fill.
-    </p>
-    <textarea id="offerInput" placeholder="Paste PC offer code here..."></textarea>
-    <button class="btn primary" id="connectBtn" onclick="connectToPC()">▶ Connect</button>
-    <div id="answerCode"></div>
-    <button class="btn" id="copyAnswerBtn" onclick="copyAnswer()" style="display:none; margin-bottom:0.5rem">⎘ Copy Answer Code → send to PC</button>
-    <div id="status-msg"><span class="status-dot" id="connDot"></span>Not connected</div>
-  </div>
-
-  <!-- VR Settings -->
-  <div class="card">
-    <div class="card-title">▸ VR Settings</div>
-    <div class="settings-grid">
-      <div class="setting-item">
-        <label>EYE SEPARATION (IPD)</label>
-        <input type="range" id="ipdRange" min="40" max="74" value="64" oninput="updateIPD(this.value)">
-        <div class="range-val" id="ipdVal">64mm</div>
+  <div class="overlay" id="chooser">
+    <div class="card">
+      <div style="font-size:20px;color:var(--accent);letter-spacing:.12em">VR STREAM</div>
+      <div class="sub">Choose this device’s role.</div>
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" id="pickPc">PC Sender</button>
+        <button class="btn primary" id="pickMobile">Mobile Viewer</button>
       </div>
-      <div class="setting-item">
-        <label>ZOOM</label>
-        <input type="range" id="zoomRange" min="80" max="140" value="100" oninput="updateZoom(this.value)">
-        <div class="range-val" id="zoomVal">100%</div>
-      </div>
-      <div class="setting-item">
-        <label>LENS DISTORTION</label>
-        <select id="distortSelect" onchange="updateDistort(this.value)">
-          <option value="off">Off</option>
-          <option value="on" selected>On (Barrel)</option>
-        </select>
-      </div>
-      <div class="setting-item">
-        <label>CROSSHAIR</label>
-        <select id="crosshairSelect" onchange="updateCrosshair(this.value)">
-          <option value="off">Off</option>
-          <option value="on" selected>On</option>
-        </select>
+      <div class="mini" style="margin-top:12px">
+        Open the PC page first, generate the short code, then paste it here.
       </div>
     </div>
   </div>
 
-  <!-- Enter VR button -->
-  <div style="width:100%; max-width:460px; margin-top:0.3rem">
-    <button class="btn go" id="enterVrBtn" onclick="enterVR()" disabled>⬛ ENTER VR MODE</button>
-    <p style="text-align:center; font-size:0.72rem; color:var(--dim); margin-top:0.5rem">
-      Connect first, then tap to go fullscreen VR
-    </p>
+  <div class="wrap">
+    <div class="head">
+      <h1>VR STREAM</h1>
+      <div class="sub">Mobile viewer. Paste the PC code, send back the short answer, then enter VR.</div>
+    </div>
+
+    <div class="card" id="connectCard">
+      <div class="row" style="justify-content:space-between">
+        <strong>Connect to PC</strong>
+        <span class="status" id="netState"><span class="dot"></span>Not connected</span>
+      </div>
+
+      <div style="margin-top:10px">
+        <textarea id="offerInput" placeholder="Paste PC offer code here..."></textarea>
+      </div>
+
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="connectBtn">Connect</button>
+      </div>
+
+      <div class="mini" style="margin-top:10px">After connecting, this phone will create an answer code for the PC.</div>
+
+      <div id="answerBox" style="margin-top:10px;display:none"></div>
+
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="copyAnswerBtn" style="display:none">Copy Answer</button>
+      </div>
+
+      <div class="status" id="mobileStatus" style="margin-top:10px"><span class="dot"></span>Waiting</div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <strong>VR Controls</strong>
+        <span class="status" id="vrState"><span class="dot"></span>Inactive</span>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn go" id="enterBtn" disabled>Enter VR</button>
+        <button class="btn danger" id="exitBtn" disabled>Exit VR</button>
+      </div>
+      <div class="mini" style="margin-top:10px">
+        Tap Enter VR after the stream arrives.
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>Available PCs</strong>
+      <div class="mini" style="margin:6px 0 10px">
+        This version is manual-paste only. Auto-listing nearby PCs in pure HTML is not possible without a relay/server.
+      </div>
+      <div id="list" class="mini">No automatic LAN discovery in HTML-only mode.</div>
+    </div>
   </div>
-</div>
 
-<!-- VR VIEW -->
-<div id="vr-view">
-  <div class="eye-container left" id="leftEye">
-    <video class="eye-video" id="videoLeft" autoplay playsinline muted></video>
-    <div class="crosshair" id="crossLeft"></div>
-  </div>
-  <div class="eye-container" id="rightEye">
-    <video class="eye-video" id="videoRight" autoplay playsinline muted></video>
-    <div class="crosshair" id="crossRight"></div>
+  <div class="viewer" id="viewer">
+    <div class="eye"><video id="leftEye" autoplay muted playsinline></video></div>
+    <div class="eye"><video id="rightEye" autoplay muted playsinline></video></div>
   </div>
 
-  <div id="separator"></div>
-  <div id="vr-status">VR STREAM ACTIVE</div>
-  <div class="scan-line"></div>
-
-  <div id="waiting-overlay">
-    <div class="waiting-text">WAITING FOR STREAM...</div>
+  <div class="hud hidden" id="hud">
+    <button class="btn" id="hideHudBtn">Hide</button>
+    <button class="btn" id="fsBtn">Fullscreen</button>
+    <button class="btn danger" id="hangupBtn">Disconnect</button>
   </div>
 
-  <div id="hud">
-    <button class="hud-btn" onclick="exitVR()">EXIT</button>
-    <button class="hud-btn" onclick="toggleSettings()">SETTINGS</button>
-  </div>
-</div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
+  <script>
+    const pack = o => LZString.compressToEncodedURIComponent(JSON.stringify(o));
+    const unpack = s => JSON.parse(LZString.decompressFromEncodedURIComponent(s));
 
-<script>
-// ───────── State ─────────
-let pc = null;
-let remoteStream = null;
-let hudTimer = null;
+    let pc = null, remoteStream = null, mode = 'mobile', hudTimer = null;
+    const $ = id => document.getElementById(id);
 
-// ───────── Auto-fill from QR URL hash ─────────
-window.addEventListener('load', () => {
-  const hash = window.location.hash;
-  const m = hash.match(/[#&]offer=([^&]+)/);
-  if (m) {
-    document.getElementById('offerInput').value = decodeURIComponent(m[1]);
-    document.getElementById('connect-card').querySelector('p').textContent = '✓ QR code detected — tap Connect!';
-  }
-});
+    function setMode(m) {
+      mode = m;
+      $('chooser').classList.add('hidden');
+      $('connectCard').classList.toggle('hidden', mode !== 'mobile');
+      $('netState').innerHTML = `<span class="dot"></span>${mode === 'mobile' ? 'Mobile mode' : 'PC mode'}`;
+      localStorage.setItem('vr-mode', mode);
+    }
 
-// ───────── WebRTC ─────────
-async function connectToPC() {
-  const raw = document.getElementById('offerInput').value.trim();
-  if (!raw) { setStatus('Paste the offer code first.', 'error'); return; }
+    function setStatus(text, kind='') {
+      $('mobileStatus').innerHTML = `<span class="dot ${kind}"></span>${text}`;
+    }
 
-  try {
-    const offer = JSON.parse(atob(raw));
-    setStatus('Connecting...', 'loading');
+    function setVr(text, kind='') {
+      $('vrState').innerHTML = `<span class="dot ${kind}"></span>${text}`;
+    }
 
-    pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    });
+    function showHud() {
+      $('hud').classList.remove('hidden');
+      clearTimeout(hudTimer);
+      hudTimer = setTimeout(() => $('hud').classList.add('hidden'), 2500);
+    }
 
-    pc.ontrack = e => {
-      remoteStream = e.streams[0];
-      document.getElementById('videoLeft').srcObject = remoteStream;
-      document.getElementById('videoRight').srcObject = remoteStream;
-      document.getElementById('waiting-overlay').classList.add('hidden');
-      setStatus('Stream received!', 'active');
-    };
+    function fullscreen() {
+      const el = document.documentElement;
+      if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
+      if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{});
+    }
 
-    pc.onicecandidate = e => {
-      if (!e.candidate) {
-        const answerStr = btoa(JSON.stringify(pc.localDescription));
-        const el = document.getElementById('answerCode');
-        el.textContent = answerStr;
-        el.style.display = 'block';
-        document.getElementById('copyAnswerBtn').style.display = 'flex';
-        setStatus('Copy answer code → paste on PC', 'loading');
+    function enterVR() {
+      $('viewer').classList.add('active');
+      $('enterBtn').disabled = true;
+      $('exitBtn').disabled = false;
+      setVr('VR active', 'active');
+      fullscreen();
+      showHud();
+    }
+
+    function exitVR() {
+      $('viewer').classList.remove('active');
+      $('enterBtn').disabled = false;
+      $('exitBtn').disabled = true;
+      $('hud').classList.add('hidden');
+      setVr('Inactive');
+      if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+      if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
+    }
+
+    async function connect() {
+      const raw = $('offerInput').value.trim();
+      if (!raw) {
+        setStatus('Paste the offer code first.', 'error');
+        return;
       }
-    };
 
-    pc.onconnectionstatechange = () => {
-      const s = pc.connectionState;
-      if (s === 'connected') {
-        setStatus('Connected! Tap ENTER VR MODE', 'active');
-        document.getElementById('enterVrBtn').disabled = false;
-      } else if (s === 'disconnected' || s === 'failed') {
-        setStatus('Connection lost.', 'error');
+      try {
+        const offer = unpack(raw);
+        pc = new RTCPeerConnection({
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+          ]
+        });
+
+        pc.ontrack = e => {
+          remoteStream = e.streams[0];
+          $('leftEye').srcObject = remoteStream;
+          $('rightEye').srcObject = remoteStream;
+          $('enterBtn').disabled = false;
+          setStatus('Stream received', 'active');
+        };
+
+        pc.onicecandidate = e => {
+          if (!e.candidate) {
+            const answerText = pack(pc.localDescription);
+            $('answerBox').style.display = 'block';
+            $('answerBox').innerHTML = `
+              <div class="mini" style="margin-bottom:6px">Copy this answer code back to the PC.</div>
+              <div style="background:#000;border:1px solid var(--border);padding:10px;border-radius:12px;word-break:break-all;font-family:ui-monospace,monospace;font-size:12px;color:var(--accent)">${answerText}</div>
+            `;
+            $('copyAnswerBtn').style.display = 'inline-flex';
+            $('copyAnswerBtn').onclick = () => navigator.clipboard.writeText(answerText).then(() => {
+              $('copyAnswerBtn').textContent = 'Copied';
+              setTimeout(() => $('copyAnswerBtn').textContent = 'Copy Answer', 1500);
+            });
+          }
+        };
+
+        pc.onconnectionstatechange = () => {
+          if (!pc) return;
+          if (pc.connectionState === 'connected') {
+            setStatus('Connected', 'active');
+            setVr('Ready', 'active');
+          } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+            setStatus('Connection lost', 'error');
+          } else {
+            setStatus(pc.connectionState);
+          }
+        };
+
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        setStatus('Creating answer...');
+      } catch (e) {
+        setStatus('Error: ' + e.message, 'error');
       }
+    }
+
+    function hangup() {
+      if (pc) {
+        pc.close();
+        pc = null;
+      }
+      if (remoteStream) {
+        remoteStream.getTracks().forEach(t => t.stop?.());
+        remoteStream = null;
+      }
+      $('leftEye').srcObject = null;
+      $('rightEye').srcObject = null;
+      $('viewer').classList.remove('active');
+      $('enterBtn').disabled = true;
+      $('exitBtn').disabled = true;
+      $('answerBox').style.display = 'none';
+      $('copyAnswerBtn').style.display = 'none';
+      setStatus('Disconnected');
+      setVr('Inactive');
+    }
+
+    $('pickPc').onclick = () => {
+      localStorage.setItem('vr-mode', 'pc');
+      $('chooser').classList.add('hidden');
+      $('connectCard').classList.add('hidden');
+      setMode('pc');
     };
 
-    await pc.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
+    $('pickMobile').onclick = () => {
+      localStorage.setItem('vr-mode', 'mobile');
+      setMode('mobile');
+    };
 
-  } catch(e) {
-    setStatus('Error: ' + e.message, 'error');
-  }
-}
+    $('connectBtn').onclick = connect;
+    $('enterBtn').onclick = enterVR;
+    $('exitBtn').onclick = exitVR;
+    $('hideHudBtn').onclick = () => $('hud').classList.add('hidden');
+    $('fsBtn').onclick = fullscreen;
+    $('hangupBtn').onclick = hangup;
 
-function copyAnswer() {
-  const text = document.getElementById('answerCode').textContent;
-  navigator.clipboard.writeText(text).then(() => {
-    document.getElementById('copyAnswerBtn').textContent = '✓ Copied!';
-    setTimeout(() => document.getElementById('copyAnswerBtn').textContent = '⎘ Copy Answer Code → send to PC', 2000);
-  });
-}
+    const saved = localStorage.getItem('vr-mode');
+    if (saved === 'pc' || saved === 'mobile') {
+      $('chooser').classList.add('hidden');
+      setMode(saved);
+      if (saved === 'pc') {
+        $('connectCard').classList.add('hidden');
+      }
+    }
 
-function setStatus(msg, type) {
-  document.getElementById('status-msg').innerHTML =
-    `<span class="status-dot ${type === 'active' ? 'active' : type === 'error' ? 'error' : ''}"></span>${msg}`;
-}
-
-// ───────── VR ─────────
-function enterVR() {
-  applySettings();
-
-  const vrView = document.getElementById('vr-view');
-  vrView.classList.add('active');
-  document.getElementById('setup-ui').style.display = 'none';
-
-  // Fullscreen + landscape lock
-  const el = document.documentElement;
-  if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
-  if (screen.orientation && screen.orientation.lock) {
-    screen.orientation.lock('landscape').catch(()=>{});
-  }
-
-  // Show HUD on tap
-  document.addEventListener('touchstart', handleTap, { passive: true });
-  document.addEventListener('click', handleTap);
-}
-
-function exitVR() {
-  document.getElementById('vr-view').classList.remove('active');
-  document.getElementById('setup-ui').style.display = 'flex';
-  if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
-  if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
-  document.removeEventListener('touchstart', handleTap);
-  document.removeEventListener('click', handleTap);
-}
-
-function handleTap(e) {
-  if (e.target.closest('#hud')) return;
-  const hud = document.getElementById('hud');
-  hud.classList.add('visible');
-  clearTimeout(hudTimer);
-  hudTimer = setTimeout(() => hud.classList.remove('visible'), 3000);
-}
-
-function toggleSettings() {
-  exitVR();
-}
-
-// ───────── Settings ─────────
-function applySettings() {
-  const distort = document.getElementById('distortSelect').value === 'on';
-  const showCross = document.getElementById('crosshairSelect').value === 'on';
-  const zoom = document.getElementById('zoomRange').value;
-
-  ['leftEye', 'rightEye'].forEach(id => {
-    const el = document.getElementById(id);
-    if (distort) el.classList.add('distort'); else el.classList.remove('distort');
-  });
-
-  ['videoLeft', 'videoRight'].forEach(id => {
-    document.getElementById(id).style.transform = `scale(${zoom/100})`;
-  });
-
-  ['crossLeft', 'crossRight'].forEach(id => {
-    document.getElementById(id).style.display = showCross ? 'block' : 'none';
-  });
-}
-
-function updateIPD(v) {
-  document.getElementById('ipdVal').textContent = v + 'mm';
-  const sep = document.getElementById('separator');
-  // Adjust IPD visually: shift separator slightly (cosmetic)
-  sep.style.left = '50%';
-}
-
-function updateZoom(v) {
-  document.getElementById('zoomVal').textContent = v + '%';
-  if (document.getElementById('vr-view').classList.contains('active')) {
-    ['videoLeft','videoRight'].forEach(id => {
-      document.getElementById(id).style.transform = `scale(${v/100})`;
+    document.addEventListener('touchstart', () => {
+      if ($('viewer').classList.contains('active')) showHud();
+    }, { passive: true });
+    document.addEventListener('click', () => {
+      if ($('viewer').classList.contains('active')) showHud();
     });
-  }
-}
-
-function updateDistort(v) {
-  if (document.getElementById('vr-view').classList.contains('active')) {
-    const on = v === 'on';
-    ['leftEye','rightEye'].forEach(id => {
-      const el = document.getElementById(id);
-      if (on) el.classList.add('distort'); else el.classList.remove('distort');
-    });
-  }
-}
-
-function updateCrosshair(v) {
-  ['crossLeft','crossRight'].forEach(id => {
-    document.getElementById(id).style.display = v === 'on' ? 'block' : 'none';
-  });
-}
-</script>
+  </script>
 </body>
 </html>
