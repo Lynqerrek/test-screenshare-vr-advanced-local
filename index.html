@@ -1,318 +1,605 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <title>VR Stream — Mobile Viewer</title>
-  <style>
-    :root{
-      --bg:#070b12; --panel:#0d1420; --border:#1a2a3a; --accent:#00e5ff; --accent2:#ff3d71;
-      --text:#c8d8e8; --dim:#4a6a8a;
-    }
-    *{box-sizing:border-box;margin:0;padding:0}
-    html,body{width:100%;height:100%;overflow:hidden;background:#000;color:var(--text);font-family:system-ui,sans-serif}
-    body{background:var(--bg);padding:16px}
-    .wrap{max-width:760px;margin:0 auto;display:grid;gap:12px}
-    .head,.card{
-      background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:14px
-    }
-    .head h1{font-size:20px;color:var(--accent);letter-spacing:.12em}
-    .sub{font-size:12px;color:var(--dim);margin-top:4px;line-height:1.45}
-    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .btn{
-      border:1px solid var(--accent);background:transparent;color:var(--accent);
-      padding:10px 14px;border-radius:10px;cursor:pointer;font:inherit
-    }
-    .btn.primary{background:rgba(0,229,255,.12)}
-    .btn.go{background:var(--accent);color:#000;font-weight:700}
-    .btn.danger{border-color:var(--accent2);color:var(--accent2)}
-    .btn:disabled{opacity:.35;cursor:not-allowed}
-    .status{font-family:ui-monospace,monospace;font-size:12px;color:var(--dim)}
-    .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--dim);margin-right:6px;vertical-align:middle}
-    .dot.active{background:#00ff88;box-shadow:0 0 10px #00ff88}
-    .dot.error{background:var(--accent2)}
-    textarea{
-      width:100%;min-height:92px;background:#000;border:1px solid var(--border);
-      color:var(--accent);border-radius:12px;padding:10px;font:inherit;resize:vertical;outline:none
-    }
-    #list{display:grid;gap:8px}
-    .peer{
-      width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;
-      border:1px solid var(--border);border-radius:12px;padding:12px;background:rgba(255,255,255,.02);cursor:pointer;
-      color:var(--text);text-align:left
-    }
-    .peer strong{display:block;font-size:14px}
-    .peer small{display:block;font-size:12px;color:var(--dim)}
-    .viewer{display:none;position:fixed;inset:0;background:#000;z-index:10}
-    .viewer.active{display:flex}
-    .eye{flex:1;position:relative;overflow:hidden}
-    .eye + .eye{border-left:2px solid #111}
-    .eye video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border:0;transform:scale(1.02)}
-    .hud{
-      position:fixed;left:50%;bottom:16px;transform:translateX(-50%);
-      display:flex;gap:8px;z-index:20
-    }
-    .hud .btn{background:rgba(0,0,0,.65);backdrop-filter:blur(8px)}
-    .mini{font-size:12px;color:var(--dim);line-height:1.5}
-    .overlay{
-      position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center;z-index:30
-    }
-    .overlay .card{max-width:420px;width:100%}
-    .hidden{display:none!important}
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cardboard VR Streamer</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        :root {
+            --bg: #020617;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            background-color: var(--bg);
+            color: white;
+            overflow: hidden;
+            touch-action: none;
+            overscroll-behavior: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        #vr-container {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            flex-direction: row;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 50;
+            contain: strict;
+        }
+
+        .eye {
+            width: 50%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            background: #000;
+        }
+
+        .vignette {
+            position: absolute;
+            top: -10%;
+            left: -10%;
+            width: 120%;
+            height: 120%;
+            background: radial-gradient(circle at center, transparent 35%, rgba(0,0,0,0.75) 75%, #000 95%);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .eye video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            transform-origin: center center;
+            will-change: transform;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            image-rendering: auto;
+        }
+
+        .divider {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            background: #000;
+            z-index: 20;
+            transform: translateX(-50%);
+        }
+
+        input[type=range] {
+            accent-color: #3b82f6;
+            width: 100%;
+        }
+
+        .hidden { display: none !important; }
+    </style>
 </head>
-<body>
-  <div class="overlay" id="chooser">
-    <div class="card">
-      <div style="font-size:20px;color:var(--accent);letter-spacing:.12em">VR STREAM</div>
-      <div class="sub">Choose this device’s role.</div>
-      <div class="row" style="margin-top:12px">
-        <button class="btn primary" id="pickPc">PC Sender</button>
-        <button class="btn primary" id="pickMobile">Mobile Viewer</button>
-      </div>
-      <div class="mini" style="margin-top:12px">
-        Open the PC page first, generate the short code, then paste it here.
-      </div>
-    </div>
-  </div>
 
-  <div class="wrap">
-    <div class="head">
-      <h1>VR STREAM</h1>
-      <div class="sub">Mobile viewer. Paste the PC code, send back the short answer, then enter VR.</div>
-    </div>
+<body class="font-sans">
 
-    <div class="card" id="connectCard">
-      <div class="row" style="justify-content:space-between">
-        <strong>Connect to PC</strong>
-        <span class="status" id="netState"><span class="dot"></span>Not connected</span>
-      </div>
+    <div id="screen-menu" class="flex flex-col items-center justify-center w-full max-w-md p-6 text-center space-y-6">
+        <div class="mb-4">
+            <h1 class="text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400 mb-2">
+                VR Streamer
+            </h1>
+            <p class="text-slate-400 font-bold tracking-tighter uppercase text-xs">
+                LAN Self-Hosted Signaling
+            </p>
+        </div>
 
-      <div style="margin-top:10px">
-        <textarea id="offerInput" placeholder="Paste PC offer code here..."></textarea>
-      </div>
+        <button onclick="showScreen('screen-host')" class="w-full py-4 px-6 bg-blue-600 hover:bg-blue-500 rounded-2xl font-semibold text-lg transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-3">
+            Share Screen (Host)
+        </button>
 
-      <div class="row" style="margin-top:10px">
-        <button class="btn primary" id="connectBtn">Connect</button>
-      </div>
-
-      <div class="mini" style="margin-top:10px">After connecting, this phone will create an answer code for the PC.</div>
-
-      <div id="answerBox" style="margin-top:10px;display:none"></div>
-
-      <div class="row" style="margin-top:10px">
-        <button class="btn" id="copyAnswerBtn" style="display:none">Copy Answer</button>
-      </div>
-
-      <div class="status" id="mobileStatus" style="margin-top:10px"><span class="dot"></span>Waiting</div>
+        <button onclick="showScreen('screen-client')" class="w-full py-4 px-6 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-semibold text-lg transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-3">
+            Enter VR Mode (Mobile)
+        </button>
     </div>
 
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <strong>VR Controls</strong>
-        <span class="status" id="vrState"><span class="dot"></span>Inactive</span>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn go" id="enterBtn" disabled>Enter VR</button>
-        <button class="btn danger" id="exitBtn" disabled>Exit VR</button>
-      </div>
-      <div class="mini" style="margin-top:10px">
-        Tap Enter VR after the stream arrives.
-      </div>
+    <div id="screen-host" class="hidden flex-col items-center justify-center w-full max-w-lg p-6 text-center space-y-6">
+        <h2 class="text-3xl font-bold text-blue-400">Host Setup</h2>
+
+        <div id="host-step-1" class="w-full flex flex-col items-center">
+            <p class="text-slate-400 mb-4 text-sm bg-slate-800/80 p-3 rounded-xl border border-blue-500/30 text-left">
+                🔥 <b>LAN PROFILE:</b><br>
+                1. Self-hosted PeerServer on this PC.<br>
+                2. Direct P2P media between host and phone.<br>
+                3. 1080p / 120 FPS requested for motion clarity.
+            </p>
+
+            <button onclick="startScreenShare()" class="py-4 px-8 bg-blue-600 hover:bg-blue-500 rounded-2xl font-semibold text-lg shadow-lg">
+                Activate LAN Stream
+            </button>
+        </div>
+
+        <div id="host-step-2" class="hidden w-full flex-col items-center space-y-4 bg-slate-800/50 p-6 rounded-3xl border border-slate-700/50">
+            <div id="qrcode-container" class="bg-white p-4 rounded-2xl shadow-xl">
+                <div id="qrcode"></div>
+            </div>
+
+            <h1 id="host-id-display" class="text-4xl font-mono font-bold text-emerald-400 tracking-widest bg-slate-900/80 px-8 py-3 rounded-2xl border border-slate-700">...</h1>
+            <p id="host-status" class="text-sm text-amber-400 animate-pulse">Waiting for connection...</p>
+
+            <video id="host-preview" autoplay muted playsinline preload="auto" disablepictureinpicture class="w-full mt-4 rounded-xl border border-slate-600 object-cover max-h-48 shadow-lg"></video>
+        </div>
+
+        <button onclick="location.reload()" class="text-slate-500 hover:text-white underline mt-4">Back</button>
     </div>
 
-    <div class="card">
-      <strong>Available PCs</strong>
-      <div class="mini" style="margin:6px 0 10px">
-        This version is manual-paste only. Auto-listing nearby PCs in pure HTML is not possible without a relay/server.
-      </div>
-      <div id="list" class="mini">No automatic LAN discovery in HTML-only mode.</div>
+    <div id="screen-client" class="hidden flex-col items-center justify-center w-full max-w-md p-6 text-center space-y-6">
+        <h2 class="text-3xl font-bold text-emerald-400">VR Receiver</h2>
+
+        <input type="text" id="target-id-input" maxlength="5" placeholder="CODE"
+               class="w-full text-center text-4xl font-mono tracking-widest py-5 bg-slate-800/80 border-2 border-slate-600 rounded-2xl text-white uppercase focus:border-emerald-500 focus:outline-none transition-all">
+
+        <button onclick="connectToHost()" class="w-full py-4 px-6 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-semibold text-lg shadow-lg shadow-emerald-500/30">
+            Connect
+        </button>
+
+        <p id="client-status" class="text-sm text-slate-400 h-6"></p>
+
+        <button onclick="location.reload()" class="text-slate-500 hover:text-white underline">Back</button>
     </div>
-  </div>
 
-  <div class="viewer" id="viewer">
-    <div class="eye"><video id="leftEye" autoplay muted playsinline></video></div>
-    <div class="eye"><video id="rightEye" autoplay muted playsinline></video></div>
-  </div>
+    <div id="vr-container">
+        <div class="eye">
+            <video id="video-left" autoplay playsinline muted preload="auto" disablepictureinpicture></video>
+            <div class="vignette"></div>
+        </div>
 
-  <div class="hud hidden" id="hud">
-    <button class="btn" id="hideHudBtn">Hide</button>
-    <button class="btn" id="fsBtn">Fullscreen</button>
-    <button class="btn danger" id="hangupBtn">Disconnect</button>
-  </div>
+        <div class="divider"></div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/lz-string/1.5.0/lz-string.min.js"></script>
-  <script>
-    const pack = o => LZString.compressToEncodedURIComponent(JSON.stringify(o));
-    const unpack = s => JSON.parse(LZString.decompressFromEncodedURIComponent(s));
+        <div class="eye">
+            <video id="video-right" autoplay playsinline muted preload="auto" disablepictureinpicture></video>
+            <div class="vignette"></div>
+        </div>
 
-    let pc = null, remoteStream = null, mode = 'mobile', hudTimer = null;
-    const $ = id => document.getElementById(id);
+        <div id="vr-ui" class="absolute inset-0 flex flex-col items-center justify-between p-6 z-50 transition-opacity duration-300 opacity-0 pointer-events-none">
+            <div class="flex justify-between w-full max-w-3xl">
+                <button onclick="exitVRMode()" class="bg-red-600/90 text-white px-5 py-3 rounded-xl backdrop-blur-md text-sm font-bold pointer-events-auto">
+                    Exit VR
+                </button>
+                <button onclick="toggleFullscreen()" class="bg-slate-800/90 text-white px-5 py-3 rounded-xl backdrop-blur-md text-sm font-bold pointer-events-auto">
+                    Fullscreen
+                </button>
+            </div>
 
-    function setMode(m) {
-      mode = m;
-      $('chooser').classList.add('hidden');
-      $('connectCard').classList.toggle('hidden', mode !== 'mobile');
-      $('netState').innerHTML = `<span class="dot"></span>${mode === 'mobile' ? 'Mobile mode' : 'PC mode'}`;
-      localStorage.setItem('vr-mode', mode);
-    }
+            <div class="bg-slate-900/90 backdrop-blur-xl p-6 rounded-3xl flex flex-col md:flex-row gap-6 text-sm pointer-events-auto border border-slate-700/50 w-full max-w-3xl">
+                <div class="flex flex-col items-center border-r border-slate-700 pr-6">
+                    <label class="text-slate-400 mb-2 text-[10px] uppercase font-bold">Source</label>
 
-    function setStatus(text, kind='') {
-      $('mobileStatus').innerHTML = `<span class="dot ${kind}"></span>${text}`;
-    }
+                    <div class="flex bg-slate-800 rounded-lg p-1 mb-2">
+                        <button id="btn-fmt-2d" onclick="setVRFormat('2d')" class="px-3 py-1 rounded bg-blue-600 text-xs">2D</button>
+                        <button id="btn-fmt-sbs" onclick="setVRFormat('sbs')" class="px-3 py-1 rounded text-xs ml-1">3D</button>
+                    </div>
 
-    function setVr(text, kind='') {
-      $('vrState').innerHTML = `<span class="dot ${kind}"></span>${text}`;
-    }
+                    <label class="text-slate-400 mb-2 text-[10px] uppercase font-bold">Fit Mode</label>
 
-    function showHud() {
-      $('hud').classList.remove('hidden');
-      clearTimeout(hudTimer);
-      hudTimer = setTimeout(() => $('hud').classList.add('hidden'), 2500);
-    }
+                    <div class="flex bg-slate-800 rounded-lg p-1">
+                        <button id="btn-fit-wide" onclick="setFitMode('contain')" class="px-3 py-1 rounded bg-emerald-600 text-xs">Wide</button>
+                        <button id="btn-fit-fill" onclick="setFitMode('cover')" class="px-3 py-1 rounded text-xs ml-1">Fill</button>
+                    </div>
+                </div>
 
-    function fullscreen() {
-      const el = document.documentElement;
-      if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
-      if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{});
-    }
+                <div class="flex-1 flex flex-col justify-center gap-4">
+                    <div>
+                        <div class="flex justify-between text-[10px] text-slate-400 font-bold uppercase mb-1">
+                            <span>Zoom</span>
+                            <span id="lbl-zoom">1.0x</span>
+                        </div>
+                        <input type="range" id="zoom-slider" min="0.5" max="2.5" step="0.05" value="1.0">
+                    </div>
 
-    function enterVR() {
-      $('viewer').classList.add('active');
-      $('enterBtn').disabled = true;
-      $('exitBtn').disabled = false;
-      setVr('VR active', 'active');
-      fullscreen();
-      showHud();
-    }
+                    <div>
+                        <div class="flex justify-between text-[10px] text-slate-400 font-bold uppercase mb-1">
+                            <span>IPD</span>
+                            <span id="lbl-ipd">0px</span>
+                        </div>
+                        <input type="range" id="ipd-slider" min="-100" max="100" step="1" value="0">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    function exitVR() {
-      $('viewer').classList.remove('active');
-      $('enterBtn').disabled = false;
-      $('exitBtn').disabled = true;
-      $('hud').classList.add('hidden');
-      setVr('Inactive');
-      if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
-      if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock();
-    }
+    <script>
+        let peer = null;
+        let localStream = null;
+        let activeCall = null;
 
-    async function connect() {
-      const raw = $('offerInput').value.trim();
-      if (!raw) {
-        setStatus('Paste the offer code first.', 'error');
-        return;
-      }
+        let vrFormat = '2d';
+        let fitMode = 'contain';
+        let currentZoom = 1.0;
+        let currentIpd = 0;
+        let uiTimeout;
 
-      try {
-        const offer = unpack(raw);
-        pc = new RTCPeerConnection({
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
-          ]
+        const PERFORMANCE_PROFILE = {
+            width: 1920,
+            height: 1080,
+            frameRate: 120,
+            maxBitrate: 35000000,
+            minBitrate: 18000000
+        };
+
+        const peerConfig = {
+            host: location.hostname,
+            port: 9000,
+            path: '/peerjs',
+            secure: false,
+            config: {
+                iceServers: [
+                    { urls: "stun:stun.l.google.com:19302" },
+                    { urls: "stun:stun1.l.google.com:19302" },
+                    { urls: "stun:stun2.l.google.com:19302" }
+                ],
+                iceCandidatePoolSize: 10,
+                bundlePolicy: "max-bundle",
+                rtcpMuxPolicy: "require",
+                sdpSemantics: "unified-plan"
+            }
+        };
+
+        function showScreen(id) {
+            ['screen-menu', 'screen-host', 'screen-client'].forEach(s => {
+                const el = document.getElementById(s);
+                el.classList.add('hidden');
+                el.classList.remove('flex');
+            });
+
+            const target = document.getElementById(id);
+            target.classList.remove('hidden');
+            target.classList.add('flex');
+        }
+
+        function generateShortId() {
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+            let res = '';
+            for (let i = 0; i < 5; i++) {
+                res += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return res;
+        }
+
+        async function startScreenShare() {
+            try {
+                const hostId = generateShortId();
+                peer = new Peer(hostId, peerConfig);
+
+                peer.on('open', async (id) => {
+                    document.getElementById('host-id-display').innerText = id;
+
+                    const qrcodeEl = document.getElementById('qrcode');
+                    qrcodeEl.innerHTML = '';
+                    new QRCode(qrcodeEl, {
+                        text: window.location.origin + window.location.pathname + '?id=' + id,
+                        width: 180,
+                        height: 180
+                    });
+
+                    try {
+                        localStream = await navigator.mediaDevices.getDisplayMedia({
+                            video: {
+                                cursor: "always",
+                                frameRate: { ideal: PERFORMANCE_PROFILE.frameRate, max: PERFORMANCE_PROFILE.frameRate },
+                                width: { ideal: PERFORMANCE_PROFILE.width, max: PERFORMANCE_PROFILE.width },
+                                height: { ideal: PERFORMANCE_PROFILE.height, max: PERFORMANCE_PROFILE.height },
+                                resizeMode: "none"
+                            },
+                            audio: false
+                        });
+
+                        const videoTrack = localStream.getVideoTracks()[0];
+                        if (videoTrack) {
+                            try {
+                                if ('contentHint' in videoTrack) videoTrack.contentHint = 'motion';
+                            } catch (_) {}
+
+                            try {
+                                await videoTrack.applyConstraints({
+                                    frameRate: { ideal: PERFORMANCE_PROFILE.frameRate, max: PERFORMANCE_PROFILE.frameRate },
+                                    width: { ideal: PERFORMANCE_PROFILE.width, max: PERFORMANCE_PROFILE.width },
+                                    height: { ideal: PERFORMANCE_PROFILE.height, max: PERFORMANCE_PROFILE.height }
+                                });
+                            } catch (constraintErr) {
+                                console.warn("Track constraints could not be applied:", constraintErr);
+                            }
+
+                            videoTrack.addEventListener('ended', () => {
+                                document.getElementById('host-status').innerText = 'Capture stopped.';
+                            });
+                        }
+
+                        const preview = document.getElementById('host-preview');
+                        preview.srcObject = localStream;
+                        preview.play?.().catch(() => {});
+
+                        document.getElementById('host-step-1').classList.add('hidden');
+                        document.getElementById('host-step-2').classList.remove('hidden');
+                        document.getElementById('host-step-2').classList.add('flex');
+                    } catch (mediaErr) {
+                        console.error("Media Capture Error:", mediaErr);
+                        peer.destroy();
+                    }
+                });
+
+                peer.on('connection', conn => {
+                    document.getElementById('host-status').innerText = "Client connected. Preparing stream...";
+
+                    conn.on('open', () => {
+                        try { conn.close(); } catch (_) {}
+                    });
+
+                    if (!localStream) {
+                        document.getElementById('host-status').innerText = "No capture stream yet.";
+                        return;
+                    }
+
+                    activeCall = peer.call(conn.peer, localStream);
+                    tuneOutgoingVideo(activeCall);
+
+                    activeCall.on('close', () => {
+                        document.getElementById('host-status').innerText = "Connection closed.";
+                    });
+
+                    activeCall.on('error', err => {
+                        console.warn("Call error:", err);
+                        document.getElementById('host-status').innerText = "Stream error.";
+                    });
+
+                    document.getElementById('host-status').innerText = "Streaming at highest available FPS...";
+                });
+
+                peer.on('error', err => {
+                    console.error("Peer Error:", err);
+                    const hostStatus = document.getElementById('host-status');
+                    if (hostStatus) hostStatus.innerText = "Peer error.";
+                });
+            } catch (e) {
+                console.error("Generic Init Error:", e);
+                location.reload();
+            }
+        }
+
+        function tuneOutgoingVideo(call) {
+            const apply = async () => {
+                try {
+                    const pc = call?.peerConnection;
+                    if (!pc) return;
+
+                    const sender = pc.getSenders().find(s => s.track && s.track.kind === 'video');
+                    if (!sender || !sender.getParameters || !sender.setParameters) return;
+
+                    const params = sender.getParameters();
+                    params.degradationPreference = 'maintain-framerate';
+                    params.encodings = (params.encodings && params.encodings.length) ? params.encodings : [{}];
+
+                    params.encodings[0].active = true;
+                    params.encodings[0].maxBitrate = PERFORMANCE_PROFILE.maxBitrate;
+                    params.encodings[0].minBitrate = PERFORMANCE_PROFILE.minBitrate;
+                    params.encodings[0].maxFramerate = PERFORMANCE_PROFILE.frameRate;
+                    params.encodings[0].scaleResolutionDownBy = 1.0;
+
+                    await sender.setParameters(params);
+                } catch (e) {
+                    console.warn("Encoding params could not be applied:", e);
+                }
+            };
+
+            apply();
+            setTimeout(apply, 150);
+            setTimeout(apply, 800);
+
+            try {
+                const pc = call?.peerConnection;
+                if (pc) {
+                    pc.addEventListener('iceconnectionstatechange', () => {
+                        if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+                            apply();
+                        }
+                    });
+                }
+            } catch (_) {}
+        }
+
+        function connectToHost() {
+            const tid = document.getElementById('target-id-input').value.toUpperCase();
+            if (!tid) return;
+
+            peer = new Peer(null, peerConfig);
+
+            peer.on('open', () => {
+                document.getElementById('client-status').innerText = "Opening direct link...";
+                const conn = peer.connect(tid, { serialization: 'json' });
+
+                conn.on('open', () => {
+                    document.getElementById('client-status').innerText = "Handshake complete.";
+                });
+
+                conn.on('close', () => {
+                    document.getElementById('client-status').innerText = "Link closed.";
+                });
+
+                conn.on('error', () => {
+                    document.getElementById('client-status').innerText = "Link error.";
+                });
+            });
+
+            peer.on('call', call => {
+                document.getElementById('client-status').innerText = "Receiving stream...";
+
+                call.answer();
+
+                call.on('stream', s => {
+                    enterVRMode(s);
+                });
+
+                call.on('error', () => {
+                    document.getElementById('client-status').innerText = "Stream failed.";
+                });
+            });
+
+            peer.on('error', err => {
+                console.error("Client peer error:", err);
+                document.getElementById('client-status').innerText = "Connection failed.";
+            });
+        }
+
+        function enterVRMode(stream) {
+            document.getElementById('screen-client').classList.add('hidden');
+            document.getElementById('screen-menu').classList.add('hidden');
+
+            const container = document.getElementById('vr-container');
+            container.style.display = 'flex';
+
+            const l = document.getElementById('video-left');
+            const r = document.getElementById('video-right');
+
+            [l, r].forEach(v => {
+                v.srcObject = stream;
+                v.play?.().catch(() => {});
+            });
+
+            requestAnimationFrame(() => {
+                toggleFullscreen();
+                updateVRCalibration();
+                showVRUI();
+            });
+        }
+
+        function setFitMode(m) {
+            fitMode = m;
+
+            const l = document.getElementById('video-left');
+            const r = document.getElementById('video-right');
+
+            l.style.objectFit = m;
+            r.style.objectFit = m;
+
+            document.getElementById('btn-fit-wide').className = m === 'contain'
+                ? 'px-3 py-1 rounded bg-emerald-600 text-xs'
+                : 'px-3 py-1 rounded text-xs';
+
+            document.getElementById('btn-fit-fill').className = m === 'cover'
+                ? 'px-3 py-1 rounded bg-emerald-600 text-xs'
+                : 'px-3 py-1 rounded text-xs';
+
+            updateVRCalibration();
+        }
+
+        function setVRFormat(f) {
+            vrFormat = f;
+
+            document.getElementById('btn-fmt-2d').className = f === '2d'
+                ? 'px-3 py-1 rounded bg-blue-600 text-xs'
+                : 'px-3 py-1 rounded text-xs';
+
+            document.getElementById('btn-fmt-sbs').className = f === 'sbs'
+                ? 'px-3 py-1 rounded bg-emerald-600 text-xs'
+                : 'px-3 py-1 rounded text-xs';
+
+            updateVRCalibration();
+        }
+
+        function updateVRCalibration() {
+            const l = document.getElementById('video-left');
+            const r = document.getElementById('video-right');
+
+            if (vrFormat === 'sbs') {
+                l.style.width = '200%';
+                l.style.objectPosition = 'left center';
+                r.style.width = '200%';
+                r.style.objectPosition = 'right center';
+            } else {
+                l.style.width = '100%';
+                l.style.objectPosition = 'center center';
+                r.style.width = '100%';
+                r.style.objectPosition = 'center center';
+            }
+
+            l.style.transform = `scale(${currentZoom}) translateX(${currentIpd}px)`;
+            r.style.transform = `scale(${currentZoom}) translateX(${-currentIpd}px)`;
+        }
+
+        function showVRUI() {
+            const ui = document.getElementById('vr-ui');
+            ui.style.opacity = '1';
+            ui.style.pointerEvents = 'auto';
+
+            clearTimeout(uiTimeout);
+            uiTimeout = setTimeout(() => {
+                ui.style.opacity = '0';
+                ui.style.pointerEvents = 'none';
+            }, 4000);
+        }
+
+        document.getElementById('vr-container').addEventListener('click', e => {
+            if (!e.target.closest('.pointer-events-auto')) showVRUI();
         });
 
-        pc.ontrack = e => {
-          remoteStream = e.streams[0];
-          $('leftEye').srcObject = remoteStream;
-          $('rightEye').srcObject = remoteStream;
-          $('enterBtn').disabled = false;
-          setStatus('Stream received', 'active');
+        document.getElementById('zoom-slider').addEventListener('input', e => {
+            currentZoom = parseFloat(e.target.value);
+            document.getElementById('lbl-zoom').innerText = currentZoom.toFixed(2) + 'x';
+            updateVRCalibration();
+        });
+
+        document.getElementById('ipd-slider').addEventListener('input', e => {
+            currentIpd = parseInt(e.target.value, 10);
+            document.getElementById('lbl-ipd').innerText = e.target.value + 'px';
+            updateVRCalibration();
+        });
+
+        function toggleFullscreen() {
+            const el = document.documentElement;
+
+            if (!document.fullscreenElement) {
+                if (el.requestFullscreen) el.requestFullscreen();
+                else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+            } else {
+                if (document.exitFullscreen) document.exitFullscreen();
+                else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+            }
+        }
+
+        function exitVRMode() {
+            location.reload();
+        }
+
+        window.onload = () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const id = urlParams.get('id');
+
+            if (id) {
+                showScreen('screen-client');
+                document.getElementById('target-id-input').value = id.toUpperCase();
+            }
         };
-
-        pc.onicecandidate = e => {
-          if (!e.candidate) {
-            const answerText = pack(pc.localDescription);
-            $('answerBox').style.display = 'block';
-            $('answerBox').innerHTML = `
-              <div class="mini" style="margin-bottom:6px">Copy this answer code back to the PC.</div>
-              <div style="background:#000;border:1px solid var(--border);padding:10px;border-radius:12px;word-break:break-all;font-family:ui-monospace,monospace;font-size:12px;color:var(--accent)">${answerText}</div>
-            `;
-            $('copyAnswerBtn').style.display = 'inline-flex';
-            $('copyAnswerBtn').onclick = () => navigator.clipboard.writeText(answerText).then(() => {
-              $('copyAnswerBtn').textContent = 'Copied';
-              setTimeout(() => $('copyAnswerBtn').textContent = 'Copy Answer', 1500);
-            });
-          }
-        };
-
-        pc.onconnectionstatechange = () => {
-          if (!pc) return;
-          if (pc.connectionState === 'connected') {
-            setStatus('Connected', 'active');
-            setVr('Ready', 'active');
-          } else if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-            setStatus('Connection lost', 'error');
-          } else {
-            setStatus(pc.connectionState);
-          }
-        };
-
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        setStatus('Creating answer...');
-      } catch (e) {
-        setStatus('Error: ' + e.message, 'error');
-      }
-    }
-
-    function hangup() {
-      if (pc) {
-        pc.close();
-        pc = null;
-      }
-      if (remoteStream) {
-        remoteStream.getTracks().forEach(t => t.stop?.());
-        remoteStream = null;
-      }
-      $('leftEye').srcObject = null;
-      $('rightEye').srcObject = null;
-      $('viewer').classList.remove('active');
-      $('enterBtn').disabled = true;
-      $('exitBtn').disabled = true;
-      $('answerBox').style.display = 'none';
-      $('copyAnswerBtn').style.display = 'none';
-      setStatus('Disconnected');
-      setVr('Inactive');
-    }
-
-    $('pickPc').onclick = () => {
-      localStorage.setItem('vr-mode', 'pc');
-      $('chooser').classList.add('hidden');
-      $('connectCard').classList.add('hidden');
-      setMode('pc');
-    };
-
-    $('pickMobile').onclick = () => {
-      localStorage.setItem('vr-mode', 'mobile');
-      setMode('mobile');
-    };
-
-    $('connectBtn').onclick = connect;
-    $('enterBtn').onclick = enterVR;
-    $('exitBtn').onclick = exitVR;
-    $('hideHudBtn').onclick = () => $('hud').classList.add('hidden');
-    $('fsBtn').onclick = fullscreen;
-    $('hangupBtn').onclick = hangup;
-
-    const saved = localStorage.getItem('vr-mode');
-    if (saved === 'pc' || saved === 'mobile') {
-      $('chooser').classList.add('hidden');
-      setMode(saved);
-      if (saved === 'pc') {
-        $('connectCard').classList.add('hidden');
-      }
-    }
-
-    document.addEventListener('touchstart', () => {
-      if ($('viewer').classList.contains('active')) showHud();
-    }, { passive: true });
-    document.addEventListener('click', () => {
-      if ($('viewer').classList.contains('active')) showHud();
-    });
-  </script>
+    </script>
 </body>
 </html>
